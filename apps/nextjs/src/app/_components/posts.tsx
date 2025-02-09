@@ -1,6 +1,7 @@
 "use client";
 
 import type { ZodType } from "zod";
+import { useState } from "react";
 import { z } from "zod";
 
 import type { RouterOutputs } from "@inf/api";
@@ -21,7 +22,10 @@ import { toast } from "@inf/ui/toast";
 
 import { api } from "~/trpc/react";
 
+const MANDATORY_FIELDS = ["title", "content"];
+
 export function CreatePostForm() {
+  const [error, setError] = useState<string | undefined>(undefined);
   const form = useForm({
     schema: z.object({
       title: z.string(),
@@ -50,15 +54,23 @@ export function CreatePostForm() {
     },
   });
 
+  const handleSubmitForm = form.handleSubmit(async (formFields) => {
+    if (MANDATORY_FIELDS.some((field) => !formFields[field])) {
+      setError("Title and content are required");
+      return;
+    }
+
+    setError(undefined);
+    await createPost.mutate(formFields);
+  });
+
   return (
     <Form {...form}>
       <form
         data-testid="post-form"
         className="flex w-full max-w-2xl flex-col gap-4"
         action={"/"}
-        onSubmit={form.handleSubmit((data) => {
-          createPost.mutate(data);
-        })}
+        onSubmit={handleSubmitForm}
       >
         <FormField
           control={form.control}
@@ -84,6 +96,7 @@ export function CreatePostForm() {
             </FormItem>
           )}
         />
+        {error && <h6>{error}</h6>}
         <Button type="submit">Create</Button>
       </form>
     </Form>
@@ -121,6 +134,95 @@ export function PostList() {
   );
 }
 
+export function EditablePostTitle(props: {
+  post: RouterOutputs["post"]["all"][number];
+}) {
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [title, setTitle] = useState<string>(props.post.title);
+  const [tempTitle, setTempTitle] = useState<string>(props.post.title);
+  const utils = api.useUtils();
+
+  const updatePost = api.post.update.useMutation({
+    onSuccess: async () => {
+      await utils.post.invalidate();
+    },
+    onError: (err) => {
+      toast.error(
+        err.data?.code === "UNAUTHORIZED"
+          ? "You must be logged in to update post"
+          : "Failed to update post",
+      );
+    },
+  });
+
+  const handleSubmitTitle = async () => {
+    setIsEditMode(false);
+    setTitle(tempTitle);
+    await updatePost.mutate({ ...props.post, title: tempTitle });
+  };
+
+  const handleCancel = () => {
+    setIsEditMode(false);
+    setTempTitle(title);
+  };
+
+  const handleTitleChange = (event) => {
+    setTempTitle(event.target.value);
+  };
+
+  const handleListenToEvents = async (
+    event: React.KeyboardEvent<HTMLTextAreaElement>,
+  ) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      await handleSubmitTitle();
+    } else if (event.key === "Escape") {
+      handleCancel();
+    }
+  };
+
+  return (
+    <div>
+      {isEditMode ? (
+        <section>
+          <textarea
+            value={tempTitle}
+            onKeyDown={handleListenToEvents}
+            onChange={handleTitleChange}
+            autoFocus
+          />
+          <div>
+            <Button onClick={handleSubmitTitle}>Create</Button>
+            <Button onClick={handleCancel} variant="ghost">
+              Cancel
+            </Button>
+          </div>
+        </section>
+      ) : (
+        <div>
+          <h2
+            className="text-2xl font-bold text-primary"
+            data-testid="editable-post-title"
+            role="heading"
+            onClick={() => {
+              setIsEditMode(true);
+            }}
+          >
+            {title}
+          </h2>
+          {props.post.created_at && (
+            <span className="pr-2">
+              created {renderRelativeTime(props.post.created_at)}
+            </span>
+          )}
+          {props.post.updated_at && (
+            <span> updated {renderRelativeTime(props.post.updated_at)}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PostCard(props: {
   post: RouterOutputs["post"]["all"][number];
 }) {
@@ -138,17 +240,23 @@ export function PostCard(props: {
     },
   });
 
+  const handleDelete = () => {
+    if (window.confirm("Are you sure you want to delete this post?")) {
+      deletePost.mutate({ id: props.post.id });
+    }
+  };
+
   return (
     <div className="flex flex-row rounded-lg bg-muted p-4">
       <div className="flex-grow">
-        <h2 className="text-2xl font-bold text-primary">{props.post.title}</h2>
+        <EditablePostTitle post={props.post} />
         <p className="mt-2 text-sm">{props.post.content}</p>
       </div>
       <div>
         <Button
           variant="ghost"
           className="cursor-pointer text-sm font-bold uppercase text-primary hover:bg-transparent hover:text-white"
-          onClick={() => deletePost.mutate({ id: props.post.id })}
+          onClick={handleDelete}
         >
           Delete
         </Button>
@@ -182,3 +290,32 @@ export function PostCardSkeleton(props: { pulse?: boolean }) {
     </div>
   );
 }
+
+const renderRelativeTime = (dateString?: string): string => {
+  if (dateString === undefined) {
+    return "A moment ago";
+  }
+
+  const now = new Date();
+  const from = new Date(dateString);
+  const diffInSeconds = Math.round((now.getTime() - from.getTime()) / 1000);
+
+  const units = [
+    { label: "year", seconds: 31536000 },
+    { label: "month", seconds: 2592000 },
+    { label: "week", seconds: 604800 },
+    { label: "day", seconds: 86400 },
+    { label: "hour", seconds: 3600 },
+    { label: "minute", seconds: 60 },
+    { label: "second", seconds: 1 },
+  ];
+
+  for (const unit of units) {
+    const value = Math.floor(diffInSeconds / unit.seconds);
+    if (value >= 1) {
+      return `${value} ${unit.label}${value > 1 ? "s" : ""} ago`;
+    }
+  }
+
+  return "Just now";
+};

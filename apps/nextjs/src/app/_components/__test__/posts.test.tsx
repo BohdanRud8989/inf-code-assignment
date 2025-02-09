@@ -1,25 +1,86 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { PropsWithChildren } from "react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { beforeEach, expect, test, vi } from "vitest";
 import { render } from "vitest.next.utils";
 
-import { CreatePostForm, PostList } from "../posts";
+import { api } from "~/trpc/react";
+import { CreatePostForm, EditablePostTitle, PostCard } from "../posts";
+
+vi.mock("~/trpc/react", () => {
+  return {
+    TRPCReactProvider: ({ children }: PropsWithChildren) => (
+      <div>{children}</div>
+    ),
+    api: {
+      useUtils: () => ({
+        post: {
+          invalidate: vi.fn().mockResolvedValue(undefined),
+        },
+      }),
+      post: {
+        create: {
+          useMutation: vi.fn(({ onSuccess }) => ({
+            mutate: vi.fn(() => {
+              onSuccess();
+            }),
+          })),
+        },
+        update: {
+          useMutation: vi.fn().mockReturnValue({
+            mutate: vi.fn(),
+          }),
+        },
+        delete: {
+          useMutation: vi.fn(),
+        },
+        all: {
+          useQuery: vi.fn().mockReturnValue({ data: [], isFetching: false }),
+        },
+      },
+    },
+  };
+});
+vi.spyOn(window, "confirm").mockReturnValue(true);
+
+const minutesSincePostCreation = 5;
+const minutesSincePostUpdated = 3;
+const mockedPost = Object.freeze({
+  title: "Old Title",
+  content: "Sample Content",
+  id: "123",
+  created_at: new Date(
+    new Date().getTime() - minutesSincePostCreation * 60 * 1000,
+  ).toISOString(),
+  updated_at: new Date(
+    new Date().getTime() - minutesSincePostUpdated * 60 * 1000,
+  ).toISOString(),
+});
+const newTitle = "New Title";
+
+const getTitleElement = (name: string) => screen.getByRole("heading", { name });
+
+const getButtonElement = (copy: string) => {
+  const regex = new RegExp(copy, "i");
+  return screen.getByRole("button", { name: regex });
+};
 
 describe("CreatePostForm Component", () => {
-  it("should render the form correctly", async () => {
+  test("should render the form correctly", async () => {
     render(<CreatePostForm />);
-    expect(screen.getByTestId("post-form")).not.toBe(null);
+    expect(screen.getByTestId("post-form")).toBeDefined();
   });
 
-  it("should have title and content input fields", async () => {
+  test("should have title and content input fields", async () => {
     render(<CreatePostForm />);
 
     const titleInput = screen.getByPlaceholderText("Title");
     const contentInput = screen.getByPlaceholderText("Content");
 
-    expect(titleInput).not.toBe(null);
-    expect(contentInput).not.toBe(null);
+    expect(titleInput).toBeDefined();
+    expect(contentInput).toBeDefined();
   });
 
-  it("should allow user to type in input fields", async () => {
+  test("should allow user to type in input fields", async () => {
     render(<CreatePostForm />);
 
     const titleInput = screen.getByPlaceholderText("Title");
@@ -28,122 +89,179 @@ describe("CreatePostForm Component", () => {
     fireEvent.change(titleInput, { target: { value: "Test Title" } });
     fireEvent.change(contentInput, { target: { value: "Test Content" } });
 
-    expect(titleInput.getAttribute("value")).toBe("Test Title");
-    expect(contentInput.getAttribute("value")).toBe("Test Content");
+    expect(titleInput.value).toBe("Test Title");
+    expect(contentInput.value).toBe("Test Content");
   });
 
-  it("should submit the form when clicking the Create button", async () => {
+  test("should submit the form when clicking the Create button", async () => {
     render(<CreatePostForm />);
 
     const titleInput = screen.getByPlaceholderText("Title");
     const contentInput = screen.getByPlaceholderText("Content");
-    const createButton = screen.getByText("Create");
+    const createButton = getButtonElement("create");
 
     fireEvent.change(titleInput, { target: { value: "Sample Post" } });
     fireEvent.change(contentInput, { target: { value: "Sample Content" } });
 
-    fireEvent.click(createButton);
+    await act(async () => {
+      fireEvent.click(createButton);
+    });
 
     await waitFor(() => {
-      expect(titleInput.getAttribute("value")).toBe(""); // Form should reset after submission
-      expect(contentInput.getAttribute("value")).toBe("");
+      expect(titleInput.value).toBe("");
+      expect(contentInput.value).toBe("");
     });
   });
 
-  /* TODO: Add a test to check if error message is displayed when no title and content are set */
-  it.skip("should display an error message and highlight fields if no title and content are set", async () => {
+  test("should display an error message and highlight fields if no title and content are set", async () => {
     render(<CreatePostForm />);
 
-    const createButton = screen.getByText("Create");
+    const createButton = getButtonElement("create");
     fireEvent.click(createButton);
 
     await waitFor(() => {
-      const errorMessage = screen.getByText("Title and content is required");
-      expect(errorMessage).not.toBe(null);
+      const errorMessage = screen.getByText("Title and content are required");
+      expect(errorMessage).toBeDefined();
     });
   });
 });
 
-describe("PostList Component", () => {
-  /* TODO: Add a test to check if clicking delete button triggers confirmation dialog */
-  it.skip("should confirm deletion before removing a post", async () => {
-    render(<PostList />);
+describe("PostCard Component", () => {
+  test("should confirm deletion before removing a post", async () => {
+    const deleteMutateMock = vi.fn();
+    vi.mocked(api.post.delete.useMutation).mockReturnValue({
+      mutate: deleteMutateMock,
+    });
 
-    const deleteButton = screen.getByText("DELETE");
+    render(<PostCard post={mockedPost} />);
+
+    const deleteButton = getButtonElement("delete");
     fireEvent.click(deleteButton);
 
-    /* Mock confirmation and test expected behavior */
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    expect(deleteMutateMock).toHaveBeenCalledWith({ id: mockedPost.id });
   });
 });
 
 describe("EditablePostTitle Component", () => {
-  /* TODO: Add a test to check if clicking the title enables editing mode */
-  it.skip("should enter edit mode when clicking on the title", async () => {
-    // render(<EditablePostTitle value="Test Title" />);
+  let updateMutateMock;
 
-    const title = screen.getByText("Test Title");
-    fireEvent.click(title);
-
-    /* Verify input field is displayed after click */
-  });
-
-  /* TODO: Add a test to verify save button updates the title */
-  it.skip("should update the title on save", async () => {
-    // render(<EditablePostTitle value="Old Title" />);
-
-    fireEvent.click(screen.getByText("Old Title"));
-    const input = screen.getByRole("textbox");
-    fireEvent.change(input, { target: { value: "New Title" } });
-
-    /* Verify title is updated after save and title is not an input anymore */
-  });
-
-  /* TODO: Add a test to verify that edit mode gets cancelled on escape key */
-  it.skip("should cancel edit mode on escape key", async () => {
-    // render(<EditablePostTitle value="Old Title" />);
-
-    fireEvent.click(screen.getByText("Old Title"));
-    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
-
-    /* Verify title is not an input anymore */
-  });
-
-  /* TODO: Add a test to verify that edit mode gets confirmed and saved on enter key */
-  it.skip("should save edit mode on enter key", async () => {
-    // render(<EditablePostTitle value="Old Title" />);
-
-    fireEvent.click(screen.getByText("Old Title"));
-    fireEvent.change(screen.getByRole("textbox"), {
-      target: { value: "New Title" },
+  beforeEach(() => {
+    updateMutateMock = vi.fn();
+    vi.mocked(api.post.update.useMutation).mockReturnValue({
+      mutate: updateMutateMock,
     });
-    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" });
-
-    /* Verify title is updated after save and title is not an input anymore */
   });
 
-  /* TODO: Add a test to verify cancel button resets the title */
-  it.skip("should reset the title on cancel", async () => {
-    // render(<EditablePostTitle initialTitle="Original Title" />);
+  test("should enter edit mode when clicking on the title", async () => {
+    render(<EditablePostTitle post={mockedPost} />);
 
-    fireEvent.click(screen.getByText("Original Title"));
+    const titleElement = getTitleElement(mockedPost.title);
+
+    fireEvent.click(titleElement);
+
+    expect(
+      screen.queryByRole("heading", { name: mockedPost.title }),
+    ).toBeNull();
+    expect(screen.getByRole("textbox")).toBeDefined();
+    expect(getButtonElement("create")).toBeDefined();
+    expect(getButtonElement("cancel")).toBeDefined();
+  });
+
+  test("should update the title on save", async () => {
+    render(<EditablePostTitle post={mockedPost} />);
+
+    fireEvent.click(getTitleElement(mockedPost.title));
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: newTitle } });
+
+    await act(async () => {
+      const createButton = getButtonElement("create");
+      fireEvent.click(createButton);
+    });
+
+    expect(getTitleElement(newTitle)).toBeDefined();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(updateMutateMock).toHaveBeenCalledWith({
+      ...mockedPost,
+      title: newTitle,
+    });
+  });
+
+  test("should cancel edit mode on escape key", async () => {
+    render(<EditablePostTitle post={mockedPost} />);
+
+    fireEvent.click(getTitleElement(mockedPost.title));
+
+    expect(screen.getByRole("textbox")).toBeDefined();
+    expect(
+      screen.queryByRole("heading", { name: mockedPost.title }),
+    ).toBeNull();
+
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+    });
+
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(getTitleElement(mockedPost.title)).toBeDefined();
+  });
+
+  test("should save edit mode on enter key", async () => {
+    render(<EditablePostTitle post={mockedPost} />);
+
+    fireEvent.click(getTitleElement(mockedPost.title));
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: newTitle },
+    });
+
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" });
+    });
+
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(getTitleElement(newTitle)).toBeDefined();
+    expect(updateMutateMock).toHaveBeenCalledWith({
+      ...mockedPost,
+      title: newTitle,
+    });
+  });
+
+  test("should reset the title on cancel", async () => {
+    render(<EditablePostTitle post={mockedPost} />);
+
+    fireEvent.click(getTitleElement(mockedPost.title));
     fireEvent.change(screen.getByRole("textbox"), {
       target: { value: "Modified" },
     });
 
-    fireEvent.click(screen.getByTestId("cancel"));
+    await act(async () => {
+      const cancelButton = getButtonElement("cancel");
+      fireEvent.click(cancelButton);
+    });
 
-    /* Verify title is reset to original value */
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(getTitleElement(mockedPost.title)).toBeDefined();
   });
 
-  /* TODO: Add a test to verify created date is displayed as relative time (e.g. 5 minutes ago) */
-  it.skip("should display created date as relative time", async () => {
-    // render(<EditablePostTitle createdDate={new Date()} />);
-    /* Verify date is displayed as relative time */
+  test("should display created date as relative time", async () => {
+    const regex = new RegExp(
+      `created ${minutesSincePostCreation} minutes ago`,
+      "i",
+    );
+
+    render(<EditablePostTitle post={mockedPost} />);
+
+    expect(screen.getByText(regex)).toBeDefined();
   });
 
-  /* TODO: Add a test to verify updated date is displayed as relative time (e.g. 5 minutes ago) */
-  it.skip("should display updated date as relative time", async () => {
-    // render(<EditablePostTitle updatedDate={new Date()} />);
-    /* Verify date is displayed as relative time */
+  test("should display updated date as relative time", async () => {
+    const regex = new RegExp(
+      `updated ${minutesSincePostUpdated} minutes ago`,
+      "i",
+    );
+
+    render(<EditablePostTitle post={mockedPost} />);
+
+    expect(screen.getByText(regex)).toBeDefined();
   });
 });
