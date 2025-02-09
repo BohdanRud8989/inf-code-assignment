@@ -10,6 +10,9 @@ export default {
   presets: [baseConfig],
   theme: {
     extend: {
+      maxHeight: {
+        list: "500px",
+      },
       fontFamily: {
         sans: ["var(--font-geist-sans)", ...fontFamily.sans],
         mono: ["var(--font-geist-mono)", ...fontFamily.mono],

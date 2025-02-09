@@ -6,6 +6,7 @@ import { render } from "vitest.next.utils";
 import { api } from "~/trpc/react";
 import { CreatePostForm, EditablePostTitle, PostCard } from "../posts";
 
+// Mocked to prevent creating new Posts in real DB(to not show them on UI then)
 vi.mock("~/trpc/react", () => {
   return {
     TRPCReactProvider: ({ children }: PropsWithChildren) => (
@@ -49,10 +50,10 @@ const mockedPost = Object.freeze({
   content: "Sample Content",
   id: "123",
   created_at: new Date(
-    new Date().getTime() - minutesSincePostCreation * 60 * 1000,
+    new Date().getTime() - (60 + minutesSincePostCreation) * 60 * 1000,
   ).toISOString(),
   updated_at: new Date(
-    new Date().getTime() - minutesSincePostUpdated * 60 * 1000,
+    new Date().getTime() - (60 + minutesSincePostUpdated) * 60 * 1000,
   ).toISOString(),
 });
 const newTitle = "New Title";
@@ -244,10 +245,7 @@ describe("EditablePostTitle Component", () => {
   });
 
   test("should display created date as relative time", async () => {
-    const regex = new RegExp(
-      `created ${minutesSincePostCreation} minutes ago`,
-      "i",
-    );
+    const regex = new RegExp(`${minutesSincePostCreation} minutes ago`, "i");
 
     render(<EditablePostTitle post={mockedPost} />);
 
@@ -255,10 +253,7 @@ describe("EditablePostTitle Component", () => {
   });
 
   test("should display updated date as relative time", async () => {
-    const regex = new RegExp(
-      `updated ${minutesSincePostUpdated} minutes ago`,
-      "i",
-    );
+    const regex = new RegExp(`${minutesSincePostUpdated} minutes ago`, "i");
 
     render(<EditablePostTitle post={mockedPost} />);
 

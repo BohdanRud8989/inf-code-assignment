@@ -19,7 +19,9 @@ import {
 } from "@inf/ui/form";
 import { Input } from "@inf/ui/input";
 import { toast } from "@inf/ui/toast";
+import { Tooltip } from "@inf/ui/tooltip";
 
+import { getRelativeTime } from "~/app/utils";
 import { api } from "~/trpc/react";
 
 const MANDATORY_FIELDS = ["title", "content"];
@@ -96,7 +98,7 @@ export function CreatePostForm() {
             </FormItem>
           )}
         />
-        {error && <h6>{error}</h6>}
+        {error && <h6 className="text-red-500">{error}</h6>}
         <Button type="submit">Create</Button>
       </form>
     </Form>
@@ -181,7 +183,7 @@ export function EditablePostTitle(props: {
   };
 
   return (
-    <div>
+    <>
       {isEditMode ? (
         <section>
           <textarea
@@ -198,9 +200,9 @@ export function EditablePostTitle(props: {
           </div>
         </section>
       ) : (
-        <div>
+        <section className="flex flex-row justify-between gap-5">
           <h2
-            className="text-2xl font-bold text-primary"
+            className="line-clamp-2 text-2xl font-bold dark:text-white"
             data-testid="editable-post-title"
             role="heading"
             onClick={() => {
@@ -209,17 +211,25 @@ export function EditablePostTitle(props: {
           >
             {title}
           </h2>
-          {props.post.created_at && (
-            <span className="pr-2">
-              created {renderRelativeTime(props.post.created_at)}
-            </span>
-          )}
-          {props.post.updated_at && (
-            <span> updated {renderRelativeTime(props.post.updated_at)}</span>
-          )}
-        </div>
+          <div className="flex flex-row gap-1">
+            {props.post.created_at && (
+              <Tooltip content="Creation date">
+                <span className="badge pr-2 text-white">
+                  {getRelativeTime(props.post.created_at)}
+                </span>
+              </Tooltip>
+            )}
+            {props.post.updated_at && (
+              <Tooltip content="Update date">
+                <span className="badge bg-cyan-500">
+                  {getRelativeTime(props.post.updated_at)}
+                </span>
+              </Tooltip>
+            )}
+          </div>
+        </section>
       )}
-    </div>
+    </>
   );
 }
 
@@ -240,6 +250,7 @@ export function PostCard(props: {
     },
   });
 
+  // used generic window method since I have no access to your internal UI library(documentation)
   const handleDelete = () => {
     if (window.confirm("Are you sure you want to delete this post?")) {
       deletePost.mutate({ id: props.post.id });
@@ -247,20 +258,15 @@ export function PostCard(props: {
   };
 
   return (
-    <div className="flex flex-row rounded-lg bg-muted p-4">
-      <div className="flex-grow">
-        <EditablePostTitle post={props.post} />
-        <p className="mt-2 text-sm">{props.post.content}</p>
-      </div>
-      <div>
-        <Button
-          variant="ghost"
-          className="cursor-pointer text-sm font-bold uppercase text-primary hover:bg-transparent hover:text-white"
-          onClick={handleDelete}
-        >
-          Delete
-        </Button>
-      </div>
+    <div className="flex flex-col gap-5 rounded-lg bg-muted p-4">
+      <EditablePostTitle post={props.post} />
+      <p className="line-clamp-5 text-sm">{props.post.content}</p>
+      <Button
+        className="cursor-pointer bg-red-600 text-sm font-bold uppercase text-white hover:bg-red-500"
+        onClick={handleDelete}
+      >
+        Delete
+      </Button>
     </div>
   );
 }
@@ -290,32 +296,3 @@ export function PostCardSkeleton(props: { pulse?: boolean }) {
     </div>
   );
 }
-
-const renderRelativeTime = (dateString?: string): string => {
-  if (dateString === undefined) {
-    return "A moment ago";
-  }
-
-  const now = new Date();
-  const from = new Date(dateString);
-  const diffInSeconds = Math.round((now.getTime() - from.getTime()) / 1000);
-
-  const units = [
-    { label: "year", seconds: 31536000 },
-    { label: "month", seconds: 2592000 },
-    { label: "week", seconds: 604800 },
-    { label: "day", seconds: 86400 },
-    { label: "hour", seconds: 3600 },
-    { label: "minute", seconds: 60 },
-    { label: "second", seconds: 1 },
-  ];
-
-  for (const unit of units) {
-    const value = Math.floor(diffInSeconds / unit.seconds);
-    if (value >= 1) {
-      return `${value} ${unit.label}${value > 1 ? "s" : ""} ago`;
-    }
-  }
-
-  return "Just now";
-};
