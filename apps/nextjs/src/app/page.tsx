@@ -30,7 +30,7 @@ export default function HomePage() {
           </h1>
 
           <CreatePostForm />
-          <div className="w-full max-w-2xl overflow-y-scroll">
+          <div className="max-h-list w-full max-w-2xl overflow-y-scroll">
             <Suspense
               fallback={
                 <div className="flex w-full flex-col gap-4">

@@ -43,3 +43,6 @@ dist/
 
 # turbo
 .turbo
+
+# IDEA
+.idea

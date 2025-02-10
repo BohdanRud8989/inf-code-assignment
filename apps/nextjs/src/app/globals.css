@@ -48,3 +48,9 @@
     --ring: 240 4.9% 83.9%;
   }
 }
+
+@layer components {
+  .badge {
+    @apply inline-block h-min whitespace-nowrap rounded bg-gray-600 px-2 py-1 text-center text-xs font-bold leading-none;
+  }
+}
